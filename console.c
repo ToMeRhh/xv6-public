@@ -18,6 +18,11 @@ static void consputc(int);
 
 static int panicked = 0;
 
+#define UP_KEY 226
+#define DOWN_KEY 227
+#define LEFT_KEY 228
+#define RIGHT_KEY 229
+
 static struct {
   struct spinlock lock;
   int locking;
@@ -126,11 +131,11 @@ panic(char *s)
 #define CRTPORT 0x3d4
 static ushort *crt = (ushort*)P2V(0xb8000);  // CGA memory
 
+int delcur = 1;
 static void
 cgaputc(int c)
 {
   int pos;
-  
   // Cursor position: col + 80*row.
   outb(CRTPORT, 14);
   pos = inb(CRTPORT+1) << 8;
@@ -141,6 +146,9 @@ cgaputc(int c)
     pos += 80 - pos%80;
   else if(c == BACKSPACE){
     if(pos > 0) --pos;
+  } else if (c==LEFT_KEY){ // left key
+    if(pos > 0) --pos;
+    delcur = 0;
   } else
     crt[pos++] = (c&0xff) | 0x0700;  // black on white
 
@@ -157,7 +165,10 @@ cgaputc(int c)
   outb(CRTPORT+1, pos>>8);
   outb(CRTPORT, 15);
   outb(CRTPORT+1, pos);
-  crt[pos] = ' ' | 0x0700;
+  if (delcur){
+    crt[pos] = ' ' | 0x0700;
+  }
+  delcur = 1;
 }
 
 void
@@ -171,6 +182,8 @@ consputc(int c)
 
   if(c == BACKSPACE){
     uartputc('\b'); uartputc(' '); uartputc('\b');
+  } else if (c==LEFT_KEY){ //left
+    uartputc('\b');
   } else
     uartputc(c);
   cgaputc(c);
@@ -185,6 +198,14 @@ struct {
 } input;
 
 #define C(x)  ((x)-'@')  // Control-x
+
+void putstar(char c){
+  uartputc('*');
+  uartputc(c);
+  uartputc('*');
+}
+
+int hist_index = 0;
 
 void
 consoleintr(int (*getc)(void))
@@ -204,17 +225,79 @@ consoleintr(int (*getc)(void))
         consputc(BACKSPACE);
       }
       break;
-    case C('H'): case '\x7f':  // Backspace
+    case C('H'): case '\x7f': case LEFT_KEY:  
       if(input.e != input.w){
         input.e--;
-        consputc(BACKSPACE);
+        if (c!=LEFT_KEY) { // Backspace
+          consputc(BACKSPACE);
+
+          int i = input.e;
+          while (input.buf[i % INPUT_BUF] != 0){
+            input.buf[i % INPUT_BUF] = input.buf[i+1 % INPUT_BUF];
+            i++;
+          }
+
+          int n=0;
+          i = input.e;
+          while (input.buf[i % INPUT_BUF] != 0){
+            consputc(input.buf[i++ % INPUT_BUF]);
+            n++;
+          }
+          while (n--){
+            consputc(LEFT_KEY);
+          }
+
+        }
+        else consputc(c);
       }
       break;
+    case RIGHT_KEY:
+      if (input.buf[(input.e) % INPUT_BUF] != 0){
+        delcur = 0;
+        consputc(input.buf[input.e++ % INPUT_BUF]);
+      }
+      break;
+    case UP_KEY: 
+      hist_index = (hist_index<10) ? hist_index+1 : hist_index;
+      // print inpu.buf, 0);
+      history(input.buf, hist_index);
+    break;
+    case DOWN_KEY:
+      hist_index = (hist_index>0) ? hist_index-1 : hist_index;
+      // print input.buf to screen
+      history(input.buf, hist_index);
+    break;
     default:
       if(c != 0 && input.e-input.r < INPUT_BUF){
+        if (c=='\n' && input.buf[input.e % INPUT_BUF] != 0){
+          while (input.buf[input.e++ % INPUT_BUF] != 0);
+        }
+        int printline = 0;
+        int i;
+        if (input.buf[(input.e) % INPUT_BUF] != 0){
+          printline = 1;
+          i = input.e;
+          while (input.buf[i % INPUT_BUF] != 0) i++;
+          for (; i>=input.e; i--){
+            input.buf[i+1 % INPUT_BUF] = input.buf[i % INPUT_BUF];//input.buf[i % INPUT_BUF];            
+          }
+        }
+
         c = (c == '\r') ? '\n' : c;
         input.buf[input.e++ % INPUT_BUF] = c;
         consputc(c);
+
+       if (printline){
+          int n=0;
+          i = input.e;
+          while (input.buf[i % INPUT_BUF] != 0){
+            consputc(input.buf[i++ % INPUT_BUF]);
+            n++;
+          }
+          while (n--){
+            consputc(LEFT_KEY);
+          }
+        }
         if(c == '\n' || c == C('D') || input.e == input.r+INPUT_BUF){
           input.w = input.e;
           wakeup(&input.r);
