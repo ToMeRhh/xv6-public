@@ -23,6 +23,11 @@ static int panicked = 0;
 #define LEFT_KEY 228
 #define RIGHT_KEY 229
 
+#define MAX_HISTORY 16
+char historyArray[MAX_HISTORY][128];
+int historyArrayTop = -1; // last filled history index
+int currentHistoryIndex = -1;
+
 static struct {
   struct spinlock lock;
   int locking;
@@ -126,6 +131,14 @@ panic(char *s)
     ;
 }
 
+void print(char *s){  
+  cli();
+  cons.locking = 0;
+
+  cprintf(s);
+  cprintf("\n");
+}
+
 //PAGEBREAK: 50
 #define BACKSPACE 0x100
 #define CRTPORT 0x3d4
@@ -199,13 +212,68 @@ struct {
 
 #define C(x)  ((x)-'@')  // Control-x
 
-void putstar(char c){
-  uartputc('*');
-  uartputc(c);
-  uartputc('*');
+
+char*
+copyFromIndex(char *s, const char *t,int index, int n)
+{
+  char *os;
+  
+  os = s;
+
+  int i=0;
+  while((n-- > 0) && (t[index] != 0)){
+    *s++ = t[index];
+    index++;
+    i++;
+  }
+
+  while(n-- > 0)
+    *s++ = 0;
+
+  return os;
 }
 
-int hist_index = 0;
+void
+addToHistory(char *line){
+
+  if (historyArrayTop < (MAX_HISTORY - 1)){
+    historyArrayTop++;
+  }
+
+  int i = historyArrayTop;
+  for (; i > 0; i--){
+    safestrcpy(historyArray[i], historyArray[i-1], INPUT_BUF); // shift all cells right
+  }
+
+  copyFromIndex(historyArray[0], line, (input.r % INPUT_BUF) ,INPUT_BUF);
+  
+
+  i = 0;
+  while(historyArray[0][i] != '\n'){
+    i++;
+  }
+  historyArray[0][i] = 0;
+}
+
+void 
+clearLine(){
+  while (input.buf[input.e % INPUT_BUF] != 0) consputc(input.buf[input.e++ % INPUT_BUF]);
+  while(input.e != input.w &&
+        input.buf[(input.e-1) % INPUT_BUF] != '\n'){
+    input.e--;
+    consputc(BACKSPACE);
+  }
+
+  int i = 0;
+  for (; i < INPUT_BUF; ++i)
+  {
+    input.buf[i] = 0;
+  }
+
+  input.e = 0;
+  input.r = 0;
+  input.w = 0;
+}
 
 void
 consoleintr(int (*getc)(void))
@@ -219,11 +287,7 @@ consoleintr(int (*getc)(void))
       doprocdump = 1;   // procdump() locks cons.lock indirectly; invoke later
       break;
     case C('U'):  // Kill line.
-      while(input.e != input.w &&
-            input.buf[(input.e-1) % INPUT_BUF] != '\n'){
-        input.e--;
-        consputc(BACKSPACE);
-      }
+      clearLine();
       break;
     case C('H'): case '\x7f': case LEFT_KEY:  
       if(input.e != input.w){
@@ -257,15 +321,37 @@ consoleintr(int (*getc)(void))
         consputc(input.buf[input.e++ % INPUT_BUF]);
       }
       break;
+    
     case UP_KEY: 
-      hist_index = (hist_index<10) ? hist_index+1 : hist_index;
-      // print inpu.buf, 0);
-      history(input.buf, hist_index);
+    if(historyArrayTop != -1 && currentHistoryIndex < historyArrayTop) {
+
+      clearLine();
+      currentHistoryIndex++;
+
+      if(history(input.buf, currentHistoryIndex) == 0){ // history copied successfuly to input.buf
+        
+        while (input.buf[input.e % INPUT_BUF] != 0){
+          consputc(input.buf[input.e++ % INPUT_BUF]);
+        }
+      }
+    }
+      
     break;
     case DOWN_KEY:
-      hist_index = (hist_index>0) ? hist_index-1 : hist_index;
-      // print input.buf to screen
-      history(input.buf, hist_index);
+      if(historyArrayTop != -1 && currentHistoryIndex >= 0){
+        clearLine();
+        currentHistoryIndex--;
+
+        if(history(input.buf, currentHistoryIndex) == 0){ // history copied successfuly to input.buf
+          
+          while (input.buf[input.e % INPUT_BUF] != 0){
+            consputc(input.buf[input.e++ % INPUT_BUF]);
+          }
+        }
+      }
+      if(currentHistoryIndex == -1){
+        clearLine();
+      }
     break;
     default:
       if(c != 0 && input.e-input.r < INPUT_BUF){
@@ -279,7 +365,7 @@ consoleintr(int (*getc)(void))
           i = input.e;
           while (input.buf[i % INPUT_BUF] != 0) i++;
           for (; i>=input.e; i--){
-            input.buf[i+1 % INPUT_BUF] = input.buf[i % INPUT_BUF];//input.buf[i % INPUT_BUF];            
+            input.buf[i+1 % INPUT_BUF] = input.buf[i % INPUT_BUF];
           }
         }
 
@@ -299,7 +385,9 @@ consoleintr(int (*getc)(void))
           }
         }
         if(c == '\n' || c == C('D') || input.e == input.r+INPUT_BUF){
+          addToHistory(input.buf);
           input.w = input.e;
+          currentHistoryIndex = -1;
           wakeup(&input.r);
         }
       }
@@ -378,4 +466,21 @@ consoleinit(void)
   ioapicenable(IRQ_KBD, 0);
 }
 
-int x;
+
+
+int
+history(char * buffer, int historyId)
+{
+  if(historyId < 0 || historyId > 15){
+    return -2;
+  }
+
+  if(historyId > historyArrayTop){
+    return -1;
+  }
+
+  safestrcpy(buffer, historyArray[historyId], INPUT_BUF);
+  
+  return 0;
+}
+
