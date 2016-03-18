@@ -117,6 +117,7 @@ void            sched(void);
 void            sleep(void*, struct spinlock*);
 void            userinit(void);
 int             wait(void);
+int             wait2(int* , int* , int* );
 void            wakeup(void*);
 void            yield(void);
 
@@ -144,6 +145,7 @@ char*           strncpy(char*, const char*, int);
 // syscall.c
 int             argint(int, int*);
 int             argptr(int, char**, int);
+int             argintptr(int, int**);
 int             argstr(int, char**);
 int             fetchint(uint, int*);
 int             fetchstr(uint, char**);

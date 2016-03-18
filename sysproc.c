@@ -27,6 +27,15 @@ sys_wait(void)
 }
 
 int
+sys_wait2(void)
+{
+  int* stime, *rutime, *retime;
+  if(argintptr(0, &retime) < 0 || argintptr(1, &rutime) < 0 || argintptr(2, &stime) < 0)
+    return -1;
+  return wait2(retime, rutime, stime);
+}
+
+int
 sys_kill(void)
 {
   int pid;

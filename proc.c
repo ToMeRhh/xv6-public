@@ -163,6 +163,13 @@ fork(void)
   np->state = RUNNABLE;
   release(&ptable.lock);
   
+  np->ctime = ticks; // save creation time of the proccess
+  np->lastretime = ticks;
+  np->retime = 0;
+  np->rutime = 0;
+  np->stime = 0;
+
+
   return pid;
 }
 
@@ -254,6 +261,16 @@ wait(void)
   }
 }
 
+int
+wait2(int* retime, int* rutime, int* stime){
+  int res = wait();
+  *retime = proc->retime;
+  *rutime = proc->rutime;
+  *stime = proc->stime;
+
+  return res;
+}
+
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
@@ -283,6 +300,9 @@ scheduler(void)
       proc = p;
       switchuvm(p);
       p->state = RUNNING;
+
+      p->retime += ticks - p->lastretime;
+
       swtch(&cpu->scheduler, proc->context);
       switchkvm();
 
@@ -371,6 +391,7 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   proc->chan = chan;
   proc->state = SLEEPING;
+  proc->laststime = ticks;
   sched();
 
   // Tidy up.
@@ -392,8 +413,12 @@ wakeup1(void *chan)
   struct proc *p;
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
+    if(p->state == SLEEPING && p->chan == chan){
       p->state = RUNNABLE;
+      p->lastretime = ticks;
+      p->stime += ticks - p->laststime;
+    }
+
 }
 
 // Wake up all processes sleeping on chan.

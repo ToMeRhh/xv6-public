@@ -141,14 +141,20 @@ getcmd(char *buf, int nbuf)
   return 0;
 }
 
+#define MAX_HISTORY 16
+
 void printHistory(){
   int i = 0;
-  char* buf = 0;
-  while(history(buf,i++)>=0)
-  {
-    printf(2,buf);
-    printf(2,"\n");
+  char buf[100];
+
+  for (i=MAX_HISTORY-1; i>=0; i--){
+    if (history(buf,i)>=0) {
+      printf(2,"%d  %s", i+1, buf);
+      printf(2,"\n");
+    }
   }
+
+
 }
 
 int
@@ -175,7 +181,7 @@ main(void)
         printf(2, "cannot cd %s\n", buf+3);
       continue;
     }
-    if(buf[0] == 'h' && buf[1] == 'i' && buf[2] == 's' && buf[3] == 't' && buf[4] == 'o' && buf[5] == 'r' && buf[6] == 'y' && buf[7] == '\n'){
+     if(buf[0] == 'h' && buf[1] == 'i' && buf[2] == 's' && buf[3] == 't' && buf[4] == 'o' && buf[5] == 'r' && buf[6] == 'y' && buf[7] == '\n'){
       printHistory();
       continue;
     }
