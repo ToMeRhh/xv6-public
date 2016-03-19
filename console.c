@@ -367,15 +367,6 @@ consoleintr(int (*getc)(void))
       }
     break;
     default:
-    uartputc('0'+input.r);
-    uartputc('\n');
-    uartputc('0'+input.e);
-    uartputc('\n');
-    uartputc('0'+input.w);
-    uartputc('\n');
-    uartputc('*');
-    uartputc('\n');
-
       if(c != 0 && input.e-input.r < INPUT_BUF){
 
         // If the user pressed enter at the middle of the line:
