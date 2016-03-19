@@ -22,11 +22,15 @@ static int panicked = 0;
 #define DOWN_KEY 227
 #define LEFT_KEY 228
 #define RIGHT_KEY 229
-
 #define MAX_HISTORY 16
+
+int leftMoves = 0;
+
 char historyArray[MAX_HISTORY][128];
 int historyArrayTop = -1; // last filled history index
 int currentHistoryIndex = -1;
+
+
 
 static struct {
   struct spinlock lock;
@@ -149,6 +153,7 @@ static void
 cgaputc(int c)
 {
   int pos;
+  
   // Cursor position: col + 80*row.
   outb(CRTPORT, 14);
   pos = inb(CRTPORT+1) << 8;
@@ -270,6 +275,7 @@ clearLine(){
     input.buf[i] = 0;
   }
 
+  leftMoves=0;
   input.e = 0;
   input.r = 0;
   input.w = 0;
@@ -289,7 +295,10 @@ consoleintr(int (*getc)(void))
     case C('U'):  // Kill line.
       clearLine();
       break;
-    case C('H'): case '\x7f': case LEFT_KEY:  
+
+    case C('H'): 
+    case '\x7f': 
+    case LEFT_KEY:  
       if(input.e != input.w){
         input.e--;
         if (c!=LEFT_KEY) { // Backspace
@@ -312,13 +321,17 @@ consoleintr(int (*getc)(void))
           }
 
         }
-        else consputc(c);
+        else {
+          consputc(c);
+          leftMoves++;
+        }
       }
       break;
     case RIGHT_KEY:
       if (input.buf[(input.e) % INPUT_BUF] != 0){
         delcur = 0;
         consputc(input.buf[input.e++ % INPUT_BUF]);
+        leftMoves--;
       }
       break;
     
@@ -354,41 +367,64 @@ consoleintr(int (*getc)(void))
       }
     break;
     default:
+    uartputc('0'+input.r);
+    uartputc('\n');
+    uartputc('0'+input.e);
+    uartputc('\n');
+    uartputc('0'+input.w);
+    uartputc('\n');
+    uartputc('*');
+    uartputc('\n');
+
       if(c != 0 && input.e-input.r < INPUT_BUF){
-        if (c=='\n' && input.buf[input.e % INPUT_BUF] != 0){
-          while (input.buf[input.e++ % INPUT_BUF] != 0);
-        }
-        int printline = 0;
-        int i;
-        if (input.buf[(input.e) % INPUT_BUF] != 0){
-          printline = 1;
-          i = input.e;
-          while (input.buf[i % INPUT_BUF] != 0) i++;
-          for (; i>=input.e; i--){
-            input.buf[i+1 % INPUT_BUF] = input.buf[i % INPUT_BUF];
+
+        // If the user pressed enter at the middle of the line:
+        if (c=='\n' && leftMoves != 0){
+          while (leftMoves != 0){
+            input.e++;
+            leftMoves--;
           }
         }
 
+
+        // insert a letter at the middle of a line:
+        int printline = 0;
+        int i;
+        if (leftMoves != 0){
+          printline = 1;
+          // shift the letter to the right:
+          for (i = leftMoves; i>=0; i--){
+            input.buf[(input.e+i+1) % INPUT_BUF] = input.buf[(input.e+i) % INPUT_BUF];
+          }
+        }
+
+        // replace '\r' with '\n'
         c = (c == '\r') ? '\n' : c;
+
+        // insert the char into the buffer and print it:
         input.buf[input.e++ % INPUT_BUF] = c;
         consputc(c);
 
-       if (printline){
-          int n=0;
-          i = input.e;
-          while (input.buf[i % INPUT_BUF] != 0){
-            consputc(input.buf[i++ % INPUT_BUF]);
-            n++;
-          }
-          while (n--){
-            consputc(LEFT_KEY);
-          }
-        }
+        // deal with EOL, CTRL+D and end of buffer:
         if(c == '\n' || c == C('D') || input.e == input.r+INPUT_BUF){
           addToHistory(input.buf);
           input.w = input.e;
           currentHistoryIndex = -1;
+          leftMoves=0;
           wakeup(&input.r);
+        }
+
+        // printline indicates if the rest of the line should be printed:
+       if (printline){
+          int n=0;
+          for (i=0; i<leftMoves; i++){
+            consputc(input.buf[i+input.e % INPUT_BUF]);
+            n++;
+          }
+          // go back left to the point of insertion
+          while (n--){
+            consputc(LEFT_KEY);
+          }
         }
       }
       break;

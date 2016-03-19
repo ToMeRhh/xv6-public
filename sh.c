@@ -189,7 +189,7 @@ main(void)
       runcmd(parsecmd(buf));
     int a,b,c;
     wait2(&a, &b, &c);
-    printf(2, "retime: %d   rutime: %d   stime: %d", a ,b ,c);
+    printf(2, "retime: %d   rutime: %d   stime: %d\n", a ,b ,c);
   }
   exit();
 }
