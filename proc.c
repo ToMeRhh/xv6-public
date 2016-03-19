@@ -12,6 +12,9 @@ struct {
   struct proc proc[NPROC];
 } ptable;
 
+struct proc* proc_q[3][QUEUE_SIZE];
+
+
 static struct proc *initproc;
 
 int nextpid = 1;
@@ -23,6 +26,7 @@ static void wakeup1(void *chan);
 void
 pinit(void)
 {
+  memset(proc_q, 0, 3 * QUEUE_SIZE);
   initlock(&ptable.lock, "ptable");
 }
 
@@ -168,7 +172,8 @@ fork(void)
   np->retime = 0;
   np->rutime = 0;
   np->stime = 0;
-
+  np->prio = proc->prio;
+  set_prio(np->prio);
 
   return pid;
 }
@@ -283,34 +288,80 @@ void
 scheduler(void)
 {
   struct proc *p;
+  int min_ctime;
+  struct proc *tmp;
 
   for(;;){
     // Enable interrupts on this processor.
     sti();
+  acquire(&ptable.lock);
+  switch (SCHEDFLAG) {
 
-    // Loop over process table looking for process to run.
-    acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
-        continue;
+      case DEFAULT:
+        for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+          if(p->state != RUNNABLE)
+            continue;
 
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
-      proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
+          // Switch to chosen process.  It is the process's job
+          // to release ptable.lock and then reacquire it
+          // before jumping back to us.
+          proc = p;
+          switchuvm(p);
+          p->state = RUNNING;
 
-      p->retime += ticks - p->lastretime;
+          p->retime += ticks - p->lastretime;
 
-      swtch(&cpu->scheduler, proc->context);
-      switchkvm();
+          swtch(&cpu->scheduler, proc->context);
+          switchkvm();
 
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
-      proc = 0;
+          // Process is done running for now.
+          // It should have changed its p->state before coming back.
+          proc = 0;
+        }
+        break;
+        
+      case FCFS:
+        min_ctime=-1;
+        tmp = 0;
+        // tmp->state = UNUSED;
+        for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+          if(p->state != RUNNABLE)
+            continue;
+          if (min_ctime == -1){
+            min_ctime = p->ctime;
+            tmp = p;
+          }
+          else if (p->ctime < min_ctime){
+            min_ctime = p->ctime;
+            tmp = p;
+          }
+        }
+        if (tmp && tmp->state==RUNNABLE) {
+          proc = p = tmp;
+          switchuvm(p);
+          p->state = RUNNING;
+
+          p->retime += ticks - p->lastretime;
+
+          swtch(&cpu->scheduler, proc->context);
+          switchkvm();
+        }
+
+        // Process is done running for now.
+        // It should have changed its p->state before coming back.
+        proc = 0;
+
+        break;
+      case DML:
+        
+        break;
+        case SML:
+        
+        break;
     }
     release(&ptable.lock);
+    // Loop over process table looking for process to run.
+    
 
   }
 }
@@ -488,4 +539,32 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+int
+set_prio(int prio){
+  if(proc->prio == prio)
+    return 0;
+
+  if (prio > 3 || prio < 1)
+    return -1;
+
+  //remove proc from cuttent quere
+  int i = 0;
+  for (; i < QUEUE_SIZE; ++i)
+  {
+    if (proc_q[proc->prio-1][i] == proc)
+    {
+      break;
+    }
+  }
+
+  for (; i < QUEUE_SIZE-1; i++)
+  {
+    proc_q[proc->prio-1][i] = proc_q[proc->prio-1][i+1];
+  }
+
+  memset(&proc_q[proc->prio-1][i],0,sizeof(proc));
+
+  return 0;
 }

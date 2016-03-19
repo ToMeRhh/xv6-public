@@ -25,6 +25,7 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 int history(char * buffer, int historyId);
+int set_prio(int prio);
 
 // ulib.c
 int stat(char*, struct stat*);

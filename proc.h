@@ -72,6 +72,7 @@ struct proc {
   int rutime;                  // Running time
   int stime;                   // Sleeping time
   int laststime;               // Last known sleeping time
+  int prio;                // in which queue am i?!?!!?
 };
 
 // Process memory is laid out contiguously, low addresses first:

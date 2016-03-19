@@ -1,5 +1,5 @@
 // Shell.
-
+#include "param.h"
 #include "types.h"
 #include "user.h"
 #include "fcntl.h"
@@ -170,7 +170,21 @@ main(void)
       break;
     }
   }
-  
+  printf(2, "Schedualer setting: ");
+  switch (SCHEDFLAG) {
+      case DEFAULT:
+        printf(2, "DEFAULT\n");
+        break;
+      case DML:
+        printf(2, "DML\n");
+        break;
+        case SML:
+        printf(2, "SML\n");
+        break;
+        case FCFS:
+        printf(2, "FCFS\n");
+        break;
+    }
   // Read and run input commands.
   while(getcmd(buf, sizeof(buf)) >= 0){
     if(buf[0] == 'c' && buf[1] == 'd' && buf[2] == ' '){
@@ -187,6 +201,8 @@ main(void)
     }
     if(fork1() == 0)
       runcmd(parsecmd(buf));
+
+    // wait();
     int a,b,c;
     wait2(&a, &b, &c);
     printf(2, "retime: %d   rutime: %d   stime: %d\n", a ,b ,c);
