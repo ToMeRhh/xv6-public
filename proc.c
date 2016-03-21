@@ -48,6 +48,7 @@ allocproc(void)
 {
   struct proc *p;
   char *sp;
+
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->state == UNUSED)
@@ -186,7 +187,6 @@ fork(void)
 
   
   np->ctime = ticks; // save creation time of the proccess
-  // np->lastretime = ticks;
   np->retime = 0;
   np->rutime = 0;
   np->stime = 0;
@@ -197,7 +197,7 @@ fork(void)
     add_proc_to_queue(np->prio-1,np);
   }
   release(&ptable.lock);
-
+  
   return pid;
 }
 
@@ -338,7 +338,7 @@ void remove_proc_from_queue(int q_index);
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
-// Scheduler never returns. It loops, doing:
+// Scheduler never returns.  It loops, doing:
 //  - choose a process to run
 //  - swtch to start running that process
 //  - eventually that process transfers control
@@ -431,12 +431,11 @@ scheduler(void)
           // cprintf("found proc:\n");
           proc = p;
           remove_proc_from_queue(i);
-          switchuvm(p);
-          p->state = RUNNING;
+          switchuvm(proc);
+          
+          proc->state = RUNNING;
 
-          // p->retime += ticks - p->lastretime;
-
-          swtch(&cpu->scheduler, p->context);
+          swtch(&cpu->scheduler, proc->context);
           switchkvm();
           proc=0;
         }
@@ -533,7 +532,6 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   proc->chan = chan;
   proc->state = SLEEPING;
-  // proc->laststime = ticks;
   sched();
 
   // Tidy up.
@@ -562,12 +560,9 @@ wakeup1(void *chan)
         add_proc_to_queue(p->prio-1, p);
       }
       else if(SCHEDFLAG==DML){
-        p->prio = 2;
+        p->prio = 3;
         add_proc_to_queue(2, p);
       }
-
-      // p->lastretime = ticks;
-      // p->stime += ticks - p->laststime;
     }
 
 }
@@ -645,11 +640,9 @@ procdump(void)
 int
 find_in_queue(int* q_index, int* p_index){
   int i, j;
-  for (i = 0; i < 3; ++i)
-  {
-    for (j = 0; j < QUEUE_SIZE; ++j)
-    {
-      if (proc==ptable.proc_q[i][j]){
+  for (i = 0; i < 3; i++) {
+    for (j = 0; j < QUEUE_SIZE; j++) {
+      if (proc==ptable.proc_q[i][j]) {
         *q_index = i;
         *p_index = j;
         return 1;
@@ -661,7 +654,8 @@ find_in_queue(int* q_index, int* p_index){
 
 
 
-void print_queue(){
+void
+print_queue(){
   return;
   int i, j;
 
@@ -677,7 +671,7 @@ void print_queue(){
 
 void
 add_proc_to_queue(int q_index,struct proc* p){
-  int j=0;
+  int j;
   //cprintf("Adding proc to prio\n");
   for (j = 0; j < QUEUE_SIZE; ++j) {
     if (ptable.proc_q[q_index][j]==0){
@@ -692,15 +686,15 @@ void
 remove_proc_from_queue(int q_index){
   int j;
 
-  for (j = 0; j < QUEUE_SIZE; ++j)
-    {
-      if (ptable.proc_q[q_index][j]==proc){
+  for (j = 0; j < QUEUE_SIZE; j++) {
+      if (ptable.proc_q[q_index][j]==proc) {
         break;
       }
     }
-  for (; j<QUEUE_SIZE-1; j++){
+  for (; j<QUEUE_SIZE-1; j++) {
     ptable.proc_q[q_index][j] = ptable.proc_q[q_index][j+1];
   }
+
   ptable.proc_q[q_index][j] = 0;
 }
 
