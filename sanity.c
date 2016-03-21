@@ -4,9 +4,10 @@
 
 void mod0(){
 	int x;
-	for (int i = 0; i < 100; ++i)
+	int i, j;
+	for (i = 0; i < 100; ++i)
 	{
-		for (int j = 0; j < 1000000; ++j)
+		for (j = 0; j < 1000000; ++j)
 		{
 			x++;
 		}
@@ -15,10 +16,11 @@ void mod0(){
 }
 
 void mod1(){
+	int i, j;
 	int x;
-	for (int i = 0; i < 100; ++i)
+	for (i = 0; i < 100; ++i)
 	{
-		for (int j = 0; j < 1000000; ++j)
+		for (j = 0; j < 1000000; ++j)
 		{
 			x++;
 		}
@@ -29,7 +31,8 @@ void mod1(){
 
 void mod2(){
 	
-	for (int i = 0; i < 100; ++i)
+	int i;
+	for (i = 0; i < 100; ++i)
 	{
 		sleep(1);
 	}

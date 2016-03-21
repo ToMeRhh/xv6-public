@@ -52,10 +52,12 @@ trap(struct trapframe *tf)
     if(cpu->id == 0){
       acquire(&tickslock);
       ticks++;
-      if (proc)
-        proc->rutime++;
       wakeup(&ticks);
       release(&tickslock);
+
+      // each tick - update all statistics for all processes at 'ptable'
+      update_statistics();
+
     }
     lapiceoi();
     break;

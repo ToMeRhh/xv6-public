@@ -115,7 +115,7 @@ userinit(void)
   p->state = RUNNABLE;
 
   p->ctime = ticks; // save creation time of the proccess
-  p->lastretime = ticks;
+  // p->lastretime = ticks;
   p->retime = 0;
   p->rutime = 0;
   p->stime = 0;
@@ -186,7 +186,7 @@ fork(void)
 
   
   np->ctime = ticks; // save creation time of the proccess
-  np->lastretime = ticks;
+  // np->lastretime = ticks;
   np->retime = 0;
   np->rutime = 0;
   np->stime = 0;
@@ -291,11 +291,45 @@ wait(void)
 
 int
 wait2(int* retime, int* rutime, int* stime){
-  int res = wait();
-  *retime = proc->retime;
-  *rutime = proc->rutime;
-  *stime = proc->stime;
-  return res;
+  struct proc *p;
+  int havekids, pid;
+
+  acquire(&ptable.lock);
+  for(;;){
+    // Scan through table looking for zombie children.
+    havekids = 0;
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->parent != proc)
+        continue;
+      havekids = 1;
+      if(p->state == ZOMBIE){
+        // Found one.
+        *retime = p->retime;
+        *rutime = p->rutime;
+        *stime = p->stime;
+        pid = p->pid;
+        kfree(p->kstack);
+        p->kstack = 0;
+        freevm(p->pgdir);
+        p->state = UNUSED;
+        p->pid = 0;
+        p->parent = 0;
+        p->name[0] = 0;
+        p->killed = 0;
+        release(&ptable.lock);
+        return pid;
+      }
+    }
+
+    // No point waiting if we don't have any children.
+    if(!havekids || proc->killed){
+      release(&ptable.lock);
+      return -1;
+    }
+
+    // Wait for children to exit.  (See wakeup1 call in proc_exit.)
+    sleep(proc, &ptable.lock);  //DOC: wait-sleep
+  }
 }
 
 void print_queue();
@@ -304,7 +338,7 @@ void remove_proc_from_queue(int q_index);
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
-// Scheduler never returns.  It loops, doing:
+// Scheduler never returns. It loops, doing:
 //  - choose a process to run
 //  - swtch to start running that process
 //  - eventually that process transfers control
@@ -334,7 +368,7 @@ scheduler(void)
           switchuvm(p);
           p->state = RUNNING;
 
-          p->retime += ticks - p->lastretime;
+          // p->retime += ticks - p->lastretime;
 
           swtch(&cpu->scheduler, proc->context);
           switchkvm();
@@ -366,7 +400,7 @@ scheduler(void)
           switchuvm(proc);
           proc->state = RUNNING;
 
-          proc->retime += ticks - proc->lastretime;
+          // proc->retime += ticks - proc->lastretime;
 
           swtch(&cpu->scheduler, proc->context);
           switchkvm();
@@ -400,7 +434,7 @@ scheduler(void)
           switchuvm(p);
           p->state = RUNNING;
 
-          p->retime += ticks - p->lastretime;
+          // p->retime += ticks - p->lastretime;
 
           swtch(&cpu->scheduler, p->context);
           switchkvm();
@@ -499,7 +533,7 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   proc->chan = chan;
   proc->state = SLEEPING;
-  proc->laststime = ticks;
+  // proc->laststime = ticks;
   sched();
 
   // Tidy up.
@@ -532,8 +566,8 @@ wakeup1(void *chan)
         add_proc_to_queue(2, p);
       }
 
-      p->lastretime = ticks;
-      p->stime += ticks - p->laststime;
+      // p->lastretime = ticks;
+      // p->stime += ticks - p->laststime;
     }
 
 }
@@ -699,3 +733,25 @@ set_prio(int prio){
 }
 
 
+void
+update_statistics(){
+  struct proc *p;
+  
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    switch(p->state){
+      case SLEEPING:
+        p->stime++;
+        break;
+      case RUNNABLE:
+        p->retime++;
+        break;
+      case RUNNING:
+        p->rutime++;
+        break;
+      default:
+        break;
+      }
+  }
+  release(&ptable.lock);
+}

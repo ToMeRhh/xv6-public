@@ -68,10 +68,8 @@ struct proc {
   char name[16];               // Process name (debugging)
   int ctime;                   // Creation time
   int retime;                  // Ready time
-  int lastretime;              // Last known ready time
   int rutime;                  // Running time
   int stime;                   // Sleeping time
-  int laststime;               // Last known sleeping time
   int prio;                // in which queue am i?!?!!?
 };
 
