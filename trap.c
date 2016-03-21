@@ -102,16 +102,20 @@ trap(struct trapframe *tf)
   // until it gets to the regular system call return.)
   if(proc && proc->killed && (tf->cs&3) == DPL_USER)
     exit();
-
-
   
   // Force process to give up CPU on clock tick.
   // If interrupts were on while locks held, would need to check nlock.
   if (proc && tf->trapno == T_IRQ0+IRQ_TIMER){
     switch (SCHEDFLAG) {
       case DEFAULT:
-        if (proc->state == RUNNING && ticks % QUANTA == 0)
+      case SML:
+      case DML:
+        if (proc->state == RUNNING && ticks % QUANTA == 0){
+          if (DML && proc->prio > 1){
+            proc->prio--;
+          }
           yield();
+        }
         break;
 
       case FCFS:
@@ -119,10 +123,9 @@ trap(struct trapframe *tf)
           yield();
         break;
 
-      case DML:
         break;
-      case SML:
-        break;
+
+
     }
   }
 

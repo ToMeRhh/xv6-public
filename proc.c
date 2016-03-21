@@ -10,9 +10,9 @@
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
+  struct proc* proc_q[3][QUEUE_SIZE];
 } ptable;
 
-struct proc* proc_q[3][QUEUE_SIZE];
 
 
 static struct proc *initproc;
@@ -26,7 +26,15 @@ static void wakeup1(void *chan);
 void
 pinit(void)
 {
-  memset(proc_q, 0, 3 * QUEUE_SIZE);
+  // memset(ptable.proc_q, 0, 3 * QUEUE_SIZE);
+  int i,j;
+  for (i = 0; i <= 2; ++i)
+  {
+    for (j = 0; j < QUEUE_SIZE; ++j)
+    {
+      ptable.proc_q[i][j]=0;
+    }
+  }
   initlock(&ptable.lock, "ptable");
 }
 
@@ -40,7 +48,6 @@ allocproc(void)
 {
   struct proc *p;
   char *sp;
-
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->state == UNUSED)
@@ -77,6 +84,8 @@ found:
   return p;
 }
 
+void add_proc_to_queue(int,struct proc*);
+
 //PAGEBREAK: 32
 // Set up first user process.
 void
@@ -104,6 +113,17 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
+
+  p->ctime = ticks; // save creation time of the proccess
+  p->lastretime = ticks;
+  p->retime = 0;
+  p->rutime = 0;
+  p->stime = 0;
+  p->prio = 2;
+  
+  if (SCHEDFLAG==SML || SCHEDFLAG==DML){
+    add_proc_to_queue(1,p);
+  }
 }
 
 // Grow current process's memory by n bytes.
@@ -163,17 +183,20 @@ fork(void)
   pid = np->pid;
 
   // lock to force the compiler to emit the np->state write last.
-  acquire(&ptable.lock);
-  np->state = RUNNABLE;
-  release(&ptable.lock);
+
   
   np->ctime = ticks; // save creation time of the proccess
   np->lastretime = ticks;
   np->retime = 0;
   np->rutime = 0;
   np->stime = 0;
+  acquire(&ptable.lock);
+  np->state = RUNNABLE;
   np->prio = proc->prio;
-  set_prio(np->prio);
+  if (SCHEDFLAG==SML || SCHEDFLAG==DML){
+    add_proc_to_queue(np->prio-1,np);
+  }
+  release(&ptable.lock);
 
   return pid;
 }
@@ -272,9 +295,11 @@ wait2(int* retime, int* rutime, int* stime){
   *retime = proc->retime;
   *rutime = proc->rutime;
   *stime = proc->stime;
-
   return res;
 }
+
+void print_queue();
+void remove_proc_from_queue(int q_index);
 
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
@@ -290,13 +315,13 @@ scheduler(void)
   struct proc *p;
   int min_ctime;
   struct proc *tmp;
+  int i, j, b;
 
   for(;;){
     // Enable interrupts on this processor.
     sti();
   acquire(&ptable.lock);
   switch (SCHEDFLAG) {
-
       case DEFAULT:
         for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
           if(p->state != RUNNABLE)
@@ -337,11 +362,11 @@ scheduler(void)
           }
         }
         if (tmp && tmp->state==RUNNABLE) {
-          proc = p = tmp;
-          switchuvm(p);
-          p->state = RUNNING;
+          proc = tmp;
+          switchuvm(proc);
+          proc->state = RUNNING;
 
-          p->retime += ticks - p->lastretime;
+          proc->retime += ticks - proc->lastretime;
 
           swtch(&cpu->scheduler, proc->context);
           switchkvm();
@@ -352,12 +377,39 @@ scheduler(void)
         proc = 0;
 
         break;
+
       case DML:
-        
+      case SML:
+        b = 1;
+        p = 0;
+        for (i=2; i>=0; i--)  {
+          for (j=0; j<QUEUE_SIZE; j++){
+            if (ptable.proc_q[i][j] && ptable.proc_q[i][j]->state==RUNNABLE){
+              b = 0;
+              p = ptable.proc_q[i][j];
+              break;
+            }
+          }
+          if (b==0)
+            break;
+        }
+        if (p){
+          // cprintf("found proc:\n");
+          proc = p;
+          remove_proc_from_queue(i);
+          switchuvm(p);
+          p->state = RUNNING;
+
+          p->retime += ticks - p->lastretime;
+
+          swtch(&cpu->scheduler, p->context);
+          switchkvm();
+          proc=0;
+        }
         break;
-        case SML:
         
-        break;
+      default:
+        panic("X_this_should_not_happen");
     }
     release(&ptable.lock);
     // Loop over process table looking for process to run.
@@ -392,6 +444,11 @@ yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
   proc->state = RUNNABLE;
+
+  if(SCHEDFLAG==SML || SCHEDFLAG==DML){
+    add_proc_to_queue(proc->prio-1, proc);
+  }
+
   sched();
   release(&ptable.lock);
 }
@@ -466,6 +523,15 @@ wakeup1(void *chan)
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->state == SLEEPING && p->chan == chan){
       p->state = RUNNABLE;
+
+      if(SCHEDFLAG==SML){
+        add_proc_to_queue(p->prio-1, p);
+      }
+      else if(SCHEDFLAG==DML){
+        p->prio = 2;
+        add_proc_to_queue(2, p);
+      }
+
       p->lastretime = ticks;
       p->stime += ticks - p->laststime;
     }
@@ -541,30 +607,96 @@ procdump(void)
   }
 }
 
+// finds proc in one of the queues, and returns it's index
 int
-set_prio(int prio){
-  if(proc->prio == prio)
-    return 0;
-
-  if (prio > 3 || prio < 1)
-    return -1;
-
-  //remove proc from cuttent quere
-  int i = 0;
-  for (; i < QUEUE_SIZE; ++i)
+find_in_queue(int* q_index, int* p_index){
+  int i, j;
+  for (i = 0; i < 3; ++i)
   {
-    if (proc_q[proc->prio-1][i] == proc)
+    for (j = 0; j < QUEUE_SIZE; ++j)
     {
-      break;
+      if (proc==ptable.proc_q[i][j]){
+        *q_index = i;
+        *p_index = j;
+        return 1;
+      }
     }
   }
+  return -1;
+}
 
-  for (; i < QUEUE_SIZE-1; i++)
-  {
-    proc_q[proc->prio-1][i] = proc_q[proc->prio-1][i+1];
+
+
+// void print_queue(){
+//   return;
+//   int i, j;
+
+//   for (i = 0; i < 3; ++i)
+//   {
+//     cprintf("Q %d :\n", i);
+//     for (j = 0; j < QUEUE_SIZE; ++j)
+//     {
+//       cprintf(" %d. %x | ", j, ptable.proc_q[i][j]);
+//     }
+//   }
+// }
+
+void
+add_proc_to_queue(int q_index,struct proc* p){
+  int j=0;
+  //cprintf("Adding proc to prio\n");
+  for (j = 0; j < QUEUE_SIZE; ++j) {
+    if (ptable.proc_q[q_index][j]==0){
+      ptable.proc_q[q_index][j] = p;
+      return;
+    }
+  }
+  panic("Queue overflow");
+}
+
+void
+remove_proc_from_queue(int q_index){
+  int j;
+
+  for (j = 0; j < QUEUE_SIZE; ++j)
+    {
+      if (ptable.proc_q[q_index][j]==proc){
+        // ptable.proc_q[q_index][j] = 0;
+        break;
+      }
+    }
+  for (; j<QUEUE_SIZE-1; j++){
+    ptable.proc_q[q_index][j] = ptable.proc_q[q_index][j+1];
+  }
+  ptable.proc_q[q_index][j] = 0;
+}
+
+int
+set_prio(int prio){
+  prio--;
+
+  if (prio > 2 || prio < 0)
+    return -1;
+
+  if (proc==0){
+    return 0;
   }
 
-  memset(&proc_q[proc->prio-1][i],0,sizeof(proc));
-
+  int ret, q, p;
+  ret = find_in_queue(&q, &p);
+  if (ret==1){ // exists
+    if (prio==q){
+      // print_queue();
+      return 0;
+    }
+    else {
+      remove_proc_from_queue(q);
+    }
+  }
+  add_proc_to_queue(prio,proc);
+  proc->prio = prio + 1;
+  // print_queue();
   return 0;
 }
+
+
