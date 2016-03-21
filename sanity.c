@@ -42,7 +42,7 @@ int
 main(int argc, char *argv[])
 {
 	if (argc!=2){
-		printf(1, "Not enough parameters!\nUsage:\n%s n\n", argv[0]);
+		printf(1, "Not enough parameters!\nUsage:\n%s <num of forks/3>\n", argv[0]);
 		exit();
 	}
 
@@ -76,7 +76,7 @@ main(int argc, char *argv[])
 	for (i = 0; i < 3*n; ++i)
 	{
 		pid2 = wait2(&retime, &rutime, &stime);
-		printf(1, "Proc-ter! PID=%d (fork gave %d), type=%s, wait=%d, runtime=%d, i/o=%d\n", pid, pid2, proc_types[pid2%3], retime, rutime, stime);
+		printf(1, "Proc-ter! PID=%d, type=%s, wait=%d, runtime=%d, i/o=%d\n", pid2, proc_types[pid2%3], retime, rutime, stime);
 
 		av_stime[pid2%3] += stime;
 		av_retime[pid2%3] += retime;

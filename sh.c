@@ -202,10 +202,10 @@ main(void)
     if(fork1() == 0)
       runcmd(parsecmd(buf));
 
-    // wait();
-    int a,b,c;
-    wait2(&a, &b, &c);
-    printf(2, "retime: %d   rutime: %d   stime: %d\n", a ,b ,c);
+    wait();
+    // int a,b,c;
+    // wait2(&a, &b, &c);
+    // printf(2, "retime: %d   rutime: %d   stime: %d\n", a ,b ,c);
   }
   exit();
 }

@@ -627,19 +627,19 @@ find_in_queue(int* q_index, int* p_index){
 
 
 
-// void print_queue(){
-//   return;
-//   int i, j;
+void print_queue(){
+  return;
+  int i, j;
 
-//   for (i = 0; i < 3; ++i)
-//   {
-//     cprintf("Q %d :\n", i);
-//     for (j = 0; j < QUEUE_SIZE; ++j)
-//     {
-//       cprintf(" %d. %x | ", j, ptable.proc_q[i][j]);
-//     }
-//   }
-// }
+  for (i = 0; i < 3; ++i)
+  {
+    cprintf("\nQ %d :\n", i);
+    for (j = 0; j < QUEUE_SIZE; ++j)
+    {
+      cprintf("%d.%x| ", j, ptable.proc_q[i][j]);
+    }
+  }
+}
 
 void
 add_proc_to_queue(int q_index,struct proc* p){
@@ -661,7 +661,6 @@ remove_proc_from_queue(int q_index){
   for (j = 0; j < QUEUE_SIZE; ++j)
     {
       if (ptable.proc_q[q_index][j]==proc){
-        // ptable.proc_q[q_index][j] = 0;
         break;
       }
     }
@@ -679,14 +678,14 @@ set_prio(int prio){
     return -1;
 
   if (proc==0){
-    return 0;
+    return 1;
   }
 
   int ret, q, p;
   ret = find_in_queue(&q, &p);
   if (ret==1){ // exists
     if (prio==q){
-      // print_queue();
+      print_queue();
       return 0;
     }
     else {
@@ -695,7 +694,7 @@ set_prio(int prio){
   }
   add_proc_to_queue(prio,proc);
   proc->prio = prio + 1;
-  // print_queue();
+  print_queue();
   return 0;
 }
 
