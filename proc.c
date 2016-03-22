@@ -731,11 +731,11 @@ void
 update_statistics(){
   struct proc *p;
   
-  acquire(&ptable.lock);
+  
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
     switch(p->state){
       case SLEEPING:
-        p->stime++;
+        //p->stime++;
         break;
       case RUNNABLE:
         p->retime++;
@@ -747,5 +747,5 @@ update_statistics(){
         break;
       }
   }
-  release(&ptable.lock);
+  
 }

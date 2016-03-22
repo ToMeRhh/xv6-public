@@ -5,11 +5,11 @@
 
 // Sets the priority to 'prio', and starts working:
 void mod0(int prio){
-	// int x;
+	int i,j;
 	printf(1, "set_prio(%d)==%d\n", prio, set_prio(prio));
-	for (int i = 0; i < 100; ++i)
+	for ( i = 0; i < 100; ++i)
 	{
-		for (int j = 0; j < 1000000; ++j)
+		for ( j = 0; j < 1000000; ++j)
 		{
 			// x++;
 		}
