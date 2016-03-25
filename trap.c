@@ -113,7 +113,7 @@ trap(struct trapframe *tf)
       case SML:
       case DML:
         if (proc->state == RUNNING && ticks % QUANTA == 0){
-          if (DML && proc->prio > 1){
+          if ((SCHEDFLAG==DML) && proc->prio > 1){
             proc->prio--;
           }
           yield();
@@ -124,10 +124,6 @@ trap(struct trapframe *tf)
         if (proc->state != RUNNING)
           yield();
         break;
-
-        break;
-
-
     }
   }
 

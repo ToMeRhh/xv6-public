@@ -428,9 +428,9 @@ scheduler(void)
             break;
         }
         if (p){
-          // cprintf("found proc:\n");
           proc = p;
           remove_proc_from_queue(i);
+          
           switchuvm(proc);
           
           proc->state = RUNNING;
@@ -656,23 +656,33 @@ find_in_queue(int* q_index, int* p_index){
 
 void
 print_queue(){
-  return;
+  
+  //return;
   int i, j;
 
   for (i = 0; i < 3; ++i)
   {
-    cprintf("\nQ %d :\n", i);
+    cprintf("\n***********************\nQ %d :\n", i);
     for (j = 0; j < QUEUE_SIZE; ++j)
     {
-      cprintf("%d.%x| ", j, ptable.proc_q[i][j]);
+      cprintf("%d.%x^%d| ", j, ptable.proc_q[i][j],ptable.proc_q[i][j]->prio);
     }
   }
+  
 }
 
 void
 add_proc_to_queue(int q_index,struct proc* p){
   int j;
-  //cprintf("Adding proc to prio\n");
+  //if p exists in the queue, dont enter it again
+  for (j = 0; j < QUEUE_SIZE; ++j) {
+    if  (ptable.proc_q[q_index][j]==p)
+    {
+      return;
+    }
+  }
+
+  //add p to queue
   for (j = 0; j < QUEUE_SIZE; ++j) {
     if (ptable.proc_q[q_index][j]==0){
       ptable.proc_q[q_index][j] = p;
@@ -691,15 +701,17 @@ remove_proc_from_queue(int q_index){
         break;
       }
     }
-  for (; j<QUEUE_SIZE-1; j++) {
+  for (; j<QUEUE_SIZE-1 && (ptable.proc_q[q_index][j+1] != 0); j++) {
     ptable.proc_q[q_index][j] = ptable.proc_q[q_index][j+1];
   }
 
   ptable.proc_q[q_index][j] = 0;
+  
 }
 
 int
 set_prio(int prio){
+ 
   prio--;
 
   if (prio > 2 || prio < 0)
@@ -713,16 +725,17 @@ set_prio(int prio){
   ret = find_in_queue(&q, &p);
   if (ret==1){ // exists
     if (prio==q){
-      print_queue();
       return 0;
     }
     else {
       remove_proc_from_queue(q);
+
     }
   }
+  
   add_proc_to_queue(prio,proc);
   proc->prio = prio + 1;
-  print_queue();
+  
   return 0;
 }
 

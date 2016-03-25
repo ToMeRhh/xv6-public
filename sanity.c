@@ -79,12 +79,13 @@ main(int argc, char *argv[])
 	for (i = 0; i < 3*n; ++i)
 	{
 		pid2 = wait2(&retime, &rutime, &stime);
-		printf(1, "Proc-ter! PID=%d, type=%s, wait=%d, runtime=%d, i/o=%d\n", pid2, proc_types[pid2%3], retime, rutime, stime);
+		printf(1, "Process finished: PID=%d, type=%s, wait=%d, runtime=%d, i/o=%d\n", pid2, proc_types[pid2%3], retime, rutime, stime);
 
 		av_stime[pid2%3] += stime;
 		av_retime[pid2%3] += retime;
 		av_rutime[pid2%3] += rutime + stime + retime; // == Turnaround time -> total time
 	}
+	printf(1,"\n\n");
 	for (i=0; i<3; i++){
 		printf(1, "%s Statistics:\n", proc_types[i]);
 
@@ -97,7 +98,7 @@ main(int argc, char *argv[])
 		av_rutime[i] = av_rutime[i] / n;
 		printf(1, "Average Turnaround-Time == %d\n", av_rutime[i]);
 
-		printf(1, "************\n");
+		printf(1, "***********************************************\n\n");
 	}
 
   exit();
